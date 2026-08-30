@@ -50,9 +50,8 @@ See the [AI engineering roadmap](ai-engineering/README.md) for the skills and pr
 
 ## Contact
 
-- GitHub: add your profile link
-- LinkedIn: add your profile link
-- Email: add your professional email
+- GitHub: https://github.com/killjoyincbigcartel-cmd/edward-smith-qa-ai-portfolio
+- Email: killjoyinc.bigcartel@gmail.com
 
 Client project summaries describe my work at a high level and intentionally exclude private source code, credentials, customer data, and confidential business information.
 
