@@ -5,9 +5,9 @@
 I build and test responsive web applications, REST APIs, databases, and SaaS workflows. My background combines customer-facing technical support, structured QA documentation, Python development, and hands-on software projects.
 
 - Houston, Texas · Open to remote and hybrid work
-- Associate of Applied Science in AI Software Engineering, Maestro College — expected October 2026
+- Associate of Applied Science in AI Software Engineering, Maestro College — expected Jan 2027
 - Bachelor of Science in Computer Science, Maestro College — expected June 2027
-- 52 credits earned
+- 60 credits earned
 
 ## What I bring
 
