@@ -1,34 +1,24 @@
 # Recipe API Refactor Plan
 
 **Date:** October 18, 2026  
-**Current implementation:** `projects/recipe-api-auth/app.py`  
+**Baseline implementation on `main` before refactor:** `projects/recipe-api-auth/app.py`  
+**Refactor branch:** `refactor/recipe-api-package-structure`; the current implementation on this branch lives in `projects/recipe-api-auth/app/` with `projects/recipe-api-auth/wsgi.py`.  
 **Scope:** Planning only. This file records the current behavior and a target layout; no refactor files are created by this plan.
 
 ## 1. Single-file pain: import check
 
-I tried importing the current project app in this execution environment using a temporary copy of the current `app.py`.
+The original single-file implementation imported Flask and its extensions at module import time, raised an error immediately when `JWT_SECRET` was missing, and called `db.create_all()` at the bottom of `app.py`. That tied importing the module to runtime configuration and database initialization.
 
-**Command run:**
+**Environment check:** The Python environment available while editing this GitHub branch does not have Flask installed; checking the dependency produced `ModuleNotFoundError: No module named 'flask'`. Because of that, I could not run the original application or verify HTTP responses in this environment. This is a dependency limitation, not proof that the app would fail in a correctly configured local virtual environment.
+
+**Run these import checks locally after installing `requirements.txt`, from `projects/recipe-api-auth`:**
 
 ```bash
-cd /tmp/recipe-api-auth-check
-JWT_SECRET='local-test-secret' python -c 'import app'
+python -c "import app; print(app.app)"
+python -c "from app import app; print(app.name)"
 ```
 
-**Observed output:**
-
-```text
-Traceback (most recent call last):
-  File "<string>", line 1, in <module>
-    import app
-  File "/tmp/recipe-api-auth-check/app.py", line 7, in <module>
-    from flask import Flask, g, jsonify, request
-ModuleNotFoundError: No module named 'flask'
-```
-
-This is actual output from the current execution environment, not a claim that the command was run on the developer's own computer. The import check could not get past the missing Flask dependency, so it did not verify the later startup behavior.
-
-**What made it awkward:** Even a quick import check needs the app's dependencies installed. Also, the current module runs `db.create_all()` at import time, which couples importing the module to application/database setup. The refactor should use an application factory and explicit test setup so imports are easier to control.
+The package refactor is designed so importing `app` creates/configures the Flask object without creating tables. `wsgi.py` checks that `JWT_SECRET` is configured and initializes the database when starting with `flask --app wsgi run`. These startup and HTTP behaviors still need local runtime verification.
 
 ## 2. Responsibilities currently living in `app.py`
 
@@ -47,7 +37,7 @@ This is actual output from the current execution environment, not a claim that t
 
 One thing the refactor should improve: private `GET /recipes/<recipe_id>` currently repeats bearer-token parsing and JWT decoding instead of using the same shared auth guard as protected write routes.
 
-## 3. Target package layout (planning only)
+## 3. Target package layout (implemented on the refactor branch)
 
 The goal is to keep the public API contract the same while moving each concern to a clearer home.
 
@@ -90,7 +80,7 @@ recipe-box/
     └── SECURITY_AUDIT.md
 ```
 
-No files in this target layout are created as part of this planning step. `REFACTOR_PLAN.md` records the intended destination only.
+This layout was first recorded as the plan and then implemented on `refactor/recipe-api-package-structure`. The original single-file implementation remains on `main`. The acceptance list below records the baseline behavior the refactor is intended to preserve.
 
 ## 4. Acceptance list — existing public API contract
 
@@ -154,3 +144,12 @@ Each numbered row is one acceptance item/test scenario. A refactor should keep t
 - Do not accept `owner_id` or `role` as trusted client input.
 - Add an application factory so importing modules does not create tables or depend on the runtime server starting.
 - Run the full acceptance suite before considering the refactor complete.
+
+
+## 7. Implementation verification status
+
+- Package files and `wsgi.py` have been added on `refactor/recipe-api-package-structure`.
+- The old `projects/recipe-api-auth/app.py` file is removed on this branch; `app/__init__.py` now exports the Flask object and backward-compatible names used by the existing tests and helper script.
+- The README documents running from `projects/recipe-api-auth` with `flask --app wsgi run`.
+- Runtime import checks, HTTP requests, and the pytest suite were not run in the editing environment because Flask and Flask-SQLAlchemy are not installed there. Run them locally after `pip install -r requirements.txt`.
+- The baseline has no `GET /recipes` collection endpoint. Its read endpoint is `GET /recipes/<recipe_id>`, and that route is preserved.
