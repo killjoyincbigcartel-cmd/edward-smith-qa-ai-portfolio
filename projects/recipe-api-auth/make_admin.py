@@ -1,8 +1,8 @@
 """Promote a test account directly in the database."""
-
 import sys
 
-from app import User, app, db
+from app import User, db
+from wsgi import app  # initializes the database before this admin helper runs
 
 username = sys.argv[1] if len(sys.argv) > 1 else None
 
