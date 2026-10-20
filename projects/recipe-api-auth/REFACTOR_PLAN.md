@@ -3,7 +3,7 @@
 **Date:** October 18, 2026  
 **Baseline implementation on `main` before refactor:** `projects/recipe-api-auth/app.py`  
 **Refactor branch:** `refactor/recipe-api-package-structure`; the current implementation on this branch lives in `projects/recipe-api-auth/app/` with `projects/recipe-api-auth/wsgi.py`.  
-**Scope:** Planning only. This file records the current behavior and a target layout; no refactor files are created by this plan.
+**Scope:** Records the original API contract, implemented package layout, and verification status for the refactor branch.
 
 ## 1. Single-file pain: import check
 
@@ -14,11 +14,11 @@ The original single-file implementation imported Flask and its extensions at mod
 **Run these import checks locally after installing `requirements.txt`, from `projects/recipe-api-auth`:**
 
 ```bash
-python -c "import app; print(app.app)"
-python -c "from app import app; print(app.name)"
+python -c 'from app import create_app; print(create_app("development"))'
+python -c 'from app import create_app; a=create_app("development"); b=create_app("testing"); print(a is not b, a.config["DEBUG"], b.config["DEBUG"])'
 ```
 
-The package refactor is designed so importing `app` creates/configures the Flask object without creating tables. `wsgi.py` checks that `JWT_SECRET` is configured and initializes the database when starting with `flask --app wsgi run`. These startup and HTTP behaviors still need local runtime verification.
+The package refactor does not create a global Flask object at import time. Each `create_app(config_name)` call constructs/configures its own Flask object and registers blueprints. `wsgi.py` calls `create_app("development")`, checks that `JWT_SECRET` is configured, and initializes the database when starting with `flask --app wsgi run`. These startup and HTTP behaviors still need local runtime verification.
 
 ## 2. Responsibilities currently living in `app.py`
 
@@ -42,42 +42,36 @@ One thing the refactor should improve: private `GET /recipes/<recipe_id>` curren
 The goal is to keep the public API contract the same while moving each concern to a clearer home.
 
 ```text
-recipe-box/
-├── README.md
+recipe-api-auth/
+├── app/
+│   ├── __init__.py          # create_app(); no global app object
+│   ├── config.py            # named config classes
+│   ├── extensions.py        # SQLAlchemy extension
+│   ├── data/
+│   │   ├── __init__.py
+│   │   └── models.py
+│   ├── auth/
+│   │   ├── __init__.py
+│   │   ├── routes.py
+│   │   ├── passwords.py
+│   │   ├── tokens.py
+│   │   └── guards.py
+│   ├── recipes/
+│   │   ├── __init__.py
+│   │   ├── routes.py
+│   │   └── policies.py
+│   └── web/
+│       ├── __init__.py
+│       └── routes.py
+├── tests/
+│   └── test_auth.py
+├── wsgi.py
+├── make_admin.py
 ├── requirements.txt
 ├── .env.example
 ├── .gitignore
-├── wsgi.py
-├── app/
-│   ├── __init__.py          # create_app(); register blueprints
-│   ├── config.py            # environment/config settings
-│   ├── extensions.py        # SQLAlchemy instance and shared extensions
-│   ├── data/
-│   │   ├── __init__.py
-│   │   ├── models.py        # User and Recipe models
-│   │   └── repositories.py  # database access helpers, if useful
-│   ├── auth/
-│   │   ├── __init__.py
-│   │   ├── routes.py        # POST /register and POST /login
-│   │   ├── passwords.py     # hash and verify passwords
-│   │   ├── tokens.py        # issue and verify JWTs
-│   │   └── guards.py        # require_auth, owner/admin checks
-│   ├── recipes/
-│   │   ├── __init__.py
-│   │   ├── routes.py        # recipe HTTP endpoints
-│   │   ├── policies.py      # ownership and visibility decisions
-│   │   └── schemas.py       # request validation, if useful
-│   └── web/
-│       ├── __init__.py
-│       └── routes.py        # GET /health
-├── tests/
-│   ├── conftest.py
-│   ├── test_auth.py
-│   ├── test_recipe_visibility.py
-│   ├── test_recipe_ownership.py
-│   └── test_admin.py
-└── docs/
-    └── SECURITY_AUDIT.md
+├── README.md
+└── SECURITY_AUDIT.md
 ```
 
 This layout was first recorded as the plan and then implemented on `refactor/recipe-api-package-structure`. The original single-file implementation remains on `main`. The acceptance list below records the baseline behavior the refactor is intended to preserve.
@@ -148,8 +142,10 @@ Each numbered row is one acceptance item/test scenario. A refactor should keep t
 
 ## 7. Implementation verification status
 
-- Package files and `wsgi.py` have been added on `refactor/recipe-api-package-structure`.
-- The old `projects/recipe-api-auth/app.py` file is removed on this branch; `app/__init__.py` now exports the Flask object and backward-compatible names used by the existing tests and helper script.
+- Package files and `wsgi.py` have been updated on `refactor/recipe-api-package-structure`.
+- The old `projects/recipe-api-auth/app.py` file is removed on this branch. `app/__init__.py` exports `create_app`, models, the extension, and helper functions, but does not create a module-level Flask app.
+- `create_app("development")` and `create_app("testing")` apply different named configurations. A regression test checks that the returned objects are different and the `DEBUG`/`TESTING` values differ.
+- `wsgi.py` exposes the development app by calling `create_app("development")` and initializes tables for normal server startup.
 - The README documents running from `projects/recipe-api-auth` with `flask --app wsgi run`.
-- Runtime import checks, HTTP requests, and the pytest suite were not run in the editing environment because Flask and Flask-SQLAlchemy are not installed there. Run them locally after `pip install -r requirements.txt`.
+- Runtime import checks, HTTP requests, and the pytest suite have not been run in this editing environment because Flask and Flask-SQLAlchemy are not installed there. Run them locally after `pip install -r requirements.txt`.
 - The baseline has no `GET /recipes` collection endpoint. Its read endpoint is `GET /recipes/<recipe_id>`, and that route is preserved.
