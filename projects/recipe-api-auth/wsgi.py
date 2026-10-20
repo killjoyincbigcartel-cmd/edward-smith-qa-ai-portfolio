@@ -1,11 +1,12 @@
 """WSGI/Flask CLI entry point.
 
-Run `flask --app wsgi run` from this project directory. Importing `app`
-alone does not create tables; starting through this entry point retains the
-project's original first-run database initialization behavior.
+Run `flask --app wsgi run` from the recipe-api-auth project directory.
+The entry point builds the development app and initializes its database.
 """
-from app import app
+from app import create_app
 from app.extensions import db
+
+app = create_app("development")
 
 if not app.config.get("JWT_SECRET"):
     raise RuntimeError("JWT_SECRET is required. Put it in .env.")
