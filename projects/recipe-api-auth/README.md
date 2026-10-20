@@ -13,8 +13,8 @@ A Flask + SQLite recipe API built as a security-focused project. The code is org
 - Private vs public recipe visibility
 - Correct 401 vs 403 behavior
 - Protection against cross-user edit/delete
-- Tests for anonymous, owner, non-owner, and admin requests
-- Flask application factory and separate WSGI entry point
+- Flask application factory with named configurations
+- Independent app instances for development and testing
 
 ## Project layout
 
@@ -34,25 +34,43 @@ recipe-api-auth/
 │   │   ├── routes.py
 │   │   └── policies.py
 │   └── web/routes.py
-├── tests/
+├── tests/test_auth.py
 ├── wsgi.py
 ├── requirements.txt
 └── .env.example
 ```
 
-## Auth rules
+## Application factory
 
-- No token / invalid token / expired token -> 401 Unauthorized
-- Valid token but no permission -> 403 Forbidden
-- Recipe owner -> can update/delete their own recipe
-- Admin -> can update/delete any recipe
-- New registrations always get role="user"
-- Client-supplied role is ignored
-- `owner_id` always comes from the verified identity
+`app/__init__.py` defines `create_app(config_name, config_overrides=None)`. The `Flask(__name__)` object is created inside this function. Named configurations are in `app/config.py`:
+
+- `development`: `DEBUG=True`
+- `testing`: `TESTING=True`, `DEBUG=False`, in-memory SQLite database
+- `production`: debug and testing modes are disabled
+
+Each call returns a distinct Flask app instance. The package does not create a module-level app at import time.
+
+For an independence check, run from the project directory:
+
+```bash
+python - <<'PY'
+from app import create_app
+
+app_dev = create_app("development")
+app_test = create_app("testing")
+
+print("same object:", app_dev is app_test)
+print("dev DEBUG:", app_dev.config["DEBUG"])
+print("test DEBUG:", app_test.config["DEBUG"])
+print("test TESTING:", app_test.config["TESTING"])
+PY
+```
+
+Expected values are `same object: False`, `dev DEBUG: True`, `test DEBUG: False`, and `test TESTING: True`.
 
 ## Run it
 
-Run these commands **from the `projects/recipe-api-auth` directory**, not the outer GitHub repository root:
+Run these commands **from the `projects/recipe-api-auth` directory**, not from the outer repository root:
 
 ```bash
 python -m venv .venv
@@ -63,51 +81,68 @@ cp .env.example .env
 
 Edit `.env` and set `JWT_SECRET` to a long, random secret. Never commit `.env`.
 
-Start the API:
+Start the development app:
 
 ```bash
 flask --app wsgi run
 ```
 
-The WSGI entry point creates the tables for a first run. Importing the `app` package itself does not create tables.
+The entry point `wsgi.py` calls `create_app("development")`, validates the JWT secret, and initializes database tables. Importing the `app` package does not create a Flask app or create tables.
 
-## Check the imports
+## Import and test checks
 
 From the same project directory:
 
 ```bash
-python -c "import app; print(app.app)"
-python -c "from app import app; print(app.name)"
-```
-
-## Run the tests
-
-```bash
+python -c 'from app import create_app; print(create_app("development"))'
+python -c 'from app import create_app; a=create_app("development"); b=create_app("testing"); print(a is not b, a.config["DEBUG"], b.config["DEBUG"])'
 pytest
 ```
 
-## Example login
+## API smoke check
+
+Register a user:
+
+```bash
+curl -i -X POST http://127.0.0.1:5000/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"refactor-check","password":"RefactorPass123!"}'
+```
+
+Log in and copy the returned token:
 
 ```bash
 curl -i -X POST http://127.0.0.1:5000/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"alice","password":"MyFakePass123!"}'
+  -d '{"username":"refactor-check","password":"RefactorPass123!"}'
 ```
 
-Copy the token from the response.
-
-## Example protected write
+Create a public recipe with that token:
 
 ```bash
-curl -i -X DELETE http://127.0.0.1:5000/recipes/1 \
-  -H "Authorization: Bearer <TOKEN>"
+curl -i -X POST http://127.0.0.1:5000/recipes \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{"title":"Refactor smoke test","is_public":true}'
 ```
 
-Anonymous or invalid token -> 401.
+Then fetch the recipe by the ID returned by the create call:
 
-Logged-in non-owner -> 403 and the database stays unchanged.
+```bash
+curl -i http://127.0.0.1:5000/recipes/RECIPE_ID
+```
 
-Owner or admin -> 2xx and the write is applied.
+**Route note:** The current API has `GET /recipes/<recipe_id>` to fetch one recipe. It does not currently have a collection/list endpoint at `GET /recipes`; this refactor preserves the original routes instead of silently adding a new API contract.
+
+## Auth rules
+
+- Missing, invalid, or expired token on protected route -> 401 Unauthorized
+- Valid token but no permission -> 403 Forbidden
+- Recipe owner -> can update/delete their own recipe
+- Admin -> can update/delete any recipe
+- New registrations always get role="user"
+- Client-supplied role is ignored
+- `owner_id` always comes from the verified token identity
 
 ## Admin testing
 
@@ -115,8 +150,8 @@ Registration never allows a client to choose admin. Use the included `make_admin
 
 ## Structure responsibilities
 
-- `app/__init__.py` creates/configures the Flask app and registers route blueprints.
-- `wsgi.py` exposes the app to Flask and WSGI servers and initializes database tables for a normal run.
+- `app/__init__.py` creates and configures each Flask app instance.
+- `wsgi.py` exposes the development app to Flask and WSGI servers and initializes database tables for a normal run.
 - `app/auth/` contains account routes, password helpers, JWT logic, and shared guards.
 - `app/data/models.py` contains the SQLAlchemy models.
 - `app/recipes/` contains recipe endpoints and permission policy helpers.
