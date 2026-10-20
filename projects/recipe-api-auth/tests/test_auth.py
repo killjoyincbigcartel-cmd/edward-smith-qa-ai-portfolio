@@ -141,3 +141,59 @@ def test_admin_can_delete_other_users_recipe(client):
 
     with test_app.app_context():
         assert db.session.get(Recipe, recipe_id) is None
+
+
+def test_health_contract(client):
+    test_client = client[0]
+    response = test_client.get("/health")
+
+    assert response.status_code == 200
+    assert response.get_json() == {"status": "ok"}
+
+
+def test_register_and_login_contract(client):
+    test_client = client[0]
+
+    register_response = test_client.post(
+        "/register",
+        json={"username": "new-account", "password": "NewAccountPass123!"},
+    )
+    assert register_response.status_code == 201
+    assert register_response.get_json() == {
+        "message": "User created",
+        "username": "new-account",
+        "role": "user",
+    }
+
+    login_response = test_client.post(
+        "/login",
+        json={"username": "new-account", "password": "NewAccountPass123!"},
+    )
+    login_data = login_response.get_json()
+
+    assert login_response.status_code == 200
+    assert login_data["message"] == "Login successful"
+    assert login_data["username"] == "new-account"
+    assert login_data["role"] == "user"
+    assert isinstance(login_data["token"], str) and login_data["token"]
+    assert "password" not in login_data
+    assert "password_hash" not in login_data
+
+
+def test_public_recipe_can_be_read_without_token(client):
+    test_client, test_app, _owner_id, _stranger_id, _admin_id, recipe_id = client
+
+    with test_app.app_context():
+        recipe = db.session.get(Recipe, recipe_id)
+        recipe.is_public = True
+        db.session.commit()
+
+    response = test_client.get(f"/recipes/{recipe_id}")
+
+    assert response.status_code == 200
+    assert response.get_json() == {
+        "id": recipe_id,
+        "title": "Original Recipe",
+        "is_public": True,
+        "owner_id": client[2],
+    }
