@@ -1,21 +1,21 @@
-import os
 from datetime import datetime, timedelta, timezone
 
 import jwt
 import pytest
 
-os.environ["JWT_SECRET"] = "test-secret-that-is-long-enough"
-os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+from app import JWT_ALGORITHM, Recipe, User, create_app, db, hash_password
 
-from app import JWT_ALGORITHM, JWT_SECRET, Recipe, User, app, db, hash_password
+TEST_SECRET = "test-secret-that-is-long-enough"
 
 
 @pytest.fixture()
 def client():
-    app.config.update(TESTING=True)
+    test_app = create_app(
+        "testing",
+        config_overrides={"JWT_SECRET": TEST_SECRET},
+    )
 
-    with app.app_context():
-        db.drop_all()
+    with test_app.app_context():
         db.create_all()
 
         owner = User(
@@ -45,7 +45,13 @@ def client():
         db.session.add(recipe)
         db.session.commit()
 
-        yield app.test_client(), owner.id, stranger.id, admin.id, recipe.id
+        ids = (owner.id, stranger.id, admin.id, recipe.id)
+
+    yield test_app.test_client(), test_app, *ids
+
+    with test_app.app_context():
+        db.session.remove()
+        db.drop_all()
 
 
 def auth_header(user_id, username, role, expired=False):
@@ -60,21 +66,31 @@ def auth_header(user_id, username, role, expired=False):
             "role": role,
             "exp": expiration,
         },
-        JWT_SECRET,
+        TEST_SECRET,
         algorithm=JWT_ALGORITHM,
     )
 
     return {"Authorization": f"Bearer {token}"}
 
 
+def test_factory_creates_independent_app_instances():
+    app_dev = create_app("development", config_overrides={"JWT_SECRET": TEST_SECRET})
+    app_test = create_app("testing", config_overrides={"JWT_SECRET": TEST_SECRET})
+
+    assert app_dev is not app_test
+    assert app_dev.config["DEBUG"] is True
+    assert app_test.config["DEBUG"] is False
+    assert app_test.config["TESTING"] is True
+
+
 def test_missing_token_is_401(client):
-    test_client, _, _, _, recipe_id = client
+    test_client, _test_app, _owner_id, _stranger_id, _admin_id, recipe_id = client
     response = test_client.delete(f"/recipes/{recipe_id}")
     assert response.status_code == 401
 
 
 def test_expired_token_is_401(client):
-    test_client, owner_id, _, _, recipe_id = client
+    test_client, _test_app, owner_id, _stranger_id, _admin_id, recipe_id = client
     response = test_client.delete(
         f"/recipes/{recipe_id}",
         headers=auth_header(owner_id, "owner", "user", expired=True),
@@ -83,7 +99,7 @@ def test_expired_token_is_401(client):
 
 
 def test_owner_can_update(client):
-    test_client, owner_id, _, _, recipe_id = client
+    test_client, test_app, owner_id, _stranger_id, _admin_id, recipe_id = client
     response = test_client.patch(
         f"/recipes/{recipe_id}",
         headers=auth_header(owner_id, "owner", "user"),
@@ -92,13 +108,13 @@ def test_owner_can_update(client):
 
     assert response.status_code == 200
 
-    with app.app_context():
+    with test_app.app_context():
         recipe = db.session.get(Recipe, recipe_id)
         assert recipe.title == "Owner Updated"
 
 
 def test_non_owner_gets_403_and_database_stays_unchanged(client):
-    test_client, _, stranger_id, _, recipe_id = client
+    test_client, test_app, _owner_id, stranger_id, _admin_id, recipe_id = client
 
     response = test_client.patch(
         f"/recipes/{recipe_id}",
@@ -108,13 +124,13 @@ def test_non_owner_gets_403_and_database_stays_unchanged(client):
 
     assert response.status_code == 403
 
-    with app.app_context():
+    with test_app.app_context():
         recipe = db.session.get(Recipe, recipe_id)
         assert recipe.title == "Original Recipe"
 
 
 def test_admin_can_delete_other_users_recipe(client):
-    test_client, _, _, admin_id, recipe_id = client
+    test_client, test_app, _owner_id, _stranger_id, admin_id, recipe_id = client
 
     response = test_client.delete(
         f"/recipes/{recipe_id}",
@@ -123,5 +139,5 @@ def test_admin_can_delete_other_users_recipe(client):
 
     assert response.status_code == 200
 
-    with app.app_context():
+    with test_app.app_context():
         assert db.session.get(Recipe, recipe_id) is None
