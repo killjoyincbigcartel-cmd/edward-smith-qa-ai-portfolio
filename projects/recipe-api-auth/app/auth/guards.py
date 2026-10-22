@@ -3,8 +3,8 @@ from functools import wraps
 
 from flask import g, jsonify, request
 
-from app.data.models import Recipe, User
-from app.extensions import db
+from app.data.recipes import get_recipe
+from app.data.users import get_user_by_id
 from app.auth.tokens import decode_token
 
 
@@ -35,7 +35,7 @@ def authenticate_request():
     if not user_id or not role:
         return None, (jsonify({"error": "Unauthorized"}), 401)
 
-    user = db.session.get(User, user_id)
+    user = get_user_by_id(user_id)
     if user is None:
         return None, (jsonify({"error": "Unauthorized"}), 401)
 
@@ -64,7 +64,7 @@ def require_owner_or_admin(route_function):
         if error_response:
             return error_response
 
-        recipe = db.session.get(Recipe, kwargs.get("recipe_id"))
+        recipe = get_recipe(kwargs.get("recipe_id"))
         if recipe is None:
             return jsonify({"error": "Recipe not found"}), 404
 
