@@ -197,3 +197,11 @@ def test_public_recipe_can_be_read_without_token(client):
         "is_public": True,
         "owner_id": client[2],
     }
+
+
+def test_new_recipe_count_endpoint_is_layered_and_returns_count(client):
+    test_client = client[0]
+    response = test_client.get("/api/recipes/count")
+
+    assert response.status_code == 200
+    assert response.get_json() == {"count": 1}
