@@ -8,7 +8,7 @@ load_dotenv()
 
 class Config:
     SQLALCHEMY_DATABASE_URI = os.getenv(
-        "DATABASE_URL", "sqlite:///recipe_api.db"
+        "DATABASE_URL", "sqlite:///recipes.db"
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     JWT_SECRET = os.getenv("JWT_SECRET")
