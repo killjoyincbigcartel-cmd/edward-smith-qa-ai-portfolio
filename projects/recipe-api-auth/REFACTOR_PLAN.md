@@ -149,3 +149,18 @@ Each numbered row is one acceptance item/test scenario. A refactor should keep t
 - The README documents running from `projects/recipe-api-auth` with `flask --app wsgi run`.
 - Runtime import checks, HTTP requests, and the pytest suite have not been run in this editing environment because Flask and Flask-SQLAlchemy are not installed there. Run them locally after `pip install -r requirements.txt`.
 - The baseline has no `GET /recipes` collection endpoint. Its read endpoint is `GET /recipes/<recipe_id>`, and that route is preserved.
+
+
+## 8. Recipe ratings feature
+
+The ratings feature is implemented on this branch in addition to the 38 baseline acceptance scenarios above.
+
+- `POST /api/recipes/<recipe_id>/ratings`: requires the shared bearer-token auth guard, accepts an integer score from 1 through 5, and creates or updates the authenticated user's rating.
+- `GET /api/recipes/<recipe_id>/ratings`: returns the average rating and rating count, using SQL aggregate functions.
+- `Rating` in `app/data/models.py`: includes user/recipe foreign keys, relationships, a unique constraint on the user/recipe pair, and a score check constraint.
+- `app/services/rating_service.py`: handles validation, recipe existence checks, create/update behavior, and the summary query.
+- `app/recipes/routes.py`: exposes both endpoints. The POST endpoint uses the existing `require_auth` guard and a `10 per minute` Flask-Limiter limit keyed by client IP.
+- `tests/test_ratings.py`: covers POST/GET behavior, updates without duplicates, invalid scores, missing recipes, and authentication.
+- `migrations/versions/20261026_add_rating.py`: creates the rating table and its constraints. On a fresh database it also creates the existing user and recipe tables; on an existing database it leaves those tables intact.
+
+Run `pip install -r requirements.txt`, then `flask --app wsgi db upgrade`, `flask --app wsgi db current`, and `pytest -q` from this directory to verify the migration and runtime behavior. The 38 baseline acceptance items remain the original API contract; the new rating tests are additional coverage, not part of that baseline count.
