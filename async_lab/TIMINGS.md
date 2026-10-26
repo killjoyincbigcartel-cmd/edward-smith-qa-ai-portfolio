@@ -1,4 +1,6 @@
-# Synchronous Baseline Timings
+# Async Lab Timings
+
+## Synchronous baseline
 
 | Number of Calls | Total Time |
 |---:|---:|
@@ -6,10 +8,25 @@
 | 3 (eggs, milk, rice) | 6.287 seconds |
 | 5 (eggs, milk, rice, beans, bread) | 10.461 seconds |
 
-## Why the time increases
+These are the baseline values currently recorded for the lab. Re-run `sync_baseline.py` against the local nutrition API if you need to verify them on your machine.
 
-The total time increases as more requests are added because each request has to finish before the next one starts. The requests run sequentially, so the waiting time adds up.
+## Async comparison (three calls: eggs, milk, rice)
 
-## Why the baseline matters
+Run this from the repository root while the nutrition API is running:
 
-Having baseline timings gives us a starting point before changing how the program executes. We can compare these results with the async version later to see whether it actually reduces the total runtime.
+```bash
+python async_lab/async_http.py
+```
+
+The script prints the measured elapsed time for both approaches, the HTTP status for each response, and the result order. Copy the actual times from your terminal into this table after running it; don't fill these in with estimates.
+
+| Approach | Measured Total Time | Expected pattern |
+|---|---:|---|
+| Async sequential | _add measured time_ | Roughly the sum of the three request waits |
+| Async concurrent (`asyncio.gather`) | _add measured time_ | Roughly the slowest individual request |
+
+## What to look for
+
+The sequential async version still awaits each request before starting the next one, so it usually doesn't reduce the total waiting time. The concurrent version starts all three requests before awaiting their combined results, so independent network waits can overlap.
+
+The concurrent result list should stay in the original input order (`eggs`, `milk`, `rice`), even if the requests finish in a different order. All three responses should succeed with HTTP 200.
