@@ -6,12 +6,11 @@ from app.auth.routes import auth_bp
 from app.auth.tokens import create_token
 from app.config import CONFIG_BY_NAME, Config
 from app.data.db import init_db
-from app.data.models import Recipe, User
-from app.extensions import db, limiter
+from app.data.models import Rating, Recipe, User
+from app.extensions import db, limiter, migrate
 from app.recipes.routes import recipes_bp
 from app.web.routes import web_bp
 
-# Configuration constants remain available for existing helper code.
 JWT_ALGORITHM = Config.JWT_ALGORITHM
 JWT_SECRET = Config.JWT_SECRET
 
@@ -28,7 +27,6 @@ def create_app(config_name="development", config_overrides=None):
 
     flask_app = Flask(__name__, instance_relative_config=True)
     flask_app.config.from_object(config_class)
-
     if config_overrides:
         flask_app.config.update(config_overrides)
 
@@ -36,25 +34,18 @@ def create_app(config_name="development", config_overrides=None):
         raise RuntimeError("JWT_SECRET is required. Put it in .env.")
 
     db.init_app(flask_app)
+    migrate.init_app(flask_app, db)
     limiter.init_app(flask_app)
     flask_app.register_blueprint(web_bp)
     flask_app.register_blueprint(auth_bp)
     flask_app.register_blueprint(recipes_bp)
 
-    # Importing the package has no database side effects; app creation initializes
-    # missing tables using this app's configured database URI.
+    # Preserve existing startup behavior while enabling versioned migrations.
     init_db(flask_app)
     return flask_app
 
 
 __all__ = [
-    "JWT_ALGORITHM",
-    "JWT_SECRET",
-    "Recipe",
-    "User",
-    "create_app",
-    "create_token",
-    "db",
-    "hash_password",
-    "verify_password",
+    "JWT_ALGORITHM", "JWT_SECRET", "Rating", "Recipe", "User",
+    "create_app", "create_token", "db", "hash_password", "verify_password",
 ]
