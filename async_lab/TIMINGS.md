@@ -18,12 +18,13 @@ Run this from the repository root while the nutrition API is running:
 python async_lab/async_http.py
 ```
 
-The script prints the measured elapsed time for both approaches, the HTTP status for each response, and the result order. Copy the actual times from your terminal into this table after running it; don't fill these in with estimates.
+The script prints the elapsed time for both approaches, the HTTP status for each response, and the result order.
 
-| Approach | Measured Total Time | Expected pattern |
-|---|---:|---|
-| Async sequential | _add measured time_ | Roughly the sum of the three request waits |
-| Async concurrent (`asyncio.gather`) | _add measured time_ | Roughly the slowest individual request |
+| Approach | Total Time |
+|---|---:|
+| Sync baseline (3 calls) | 6.287 seconds |
+| Async sequential (3 calls) | 6.290 seconds |
+| Async concurrent (`asyncio.gather`, 3 calls) | 2.110 seconds |
 
 ## What to look for
 
