@@ -10,6 +10,7 @@ A Flask + SQLite recipe API with a package layout and route/service/data layers.
 - Application factory with named configurations
 - Environment-based secrets and local-only `.env`
 - Route modules for HTTP translation, services for business rules, and data helpers for persistence
+- Rate limiting on login and registration to reduce brute-force attempts and signup spam
 - New layered endpoint: `GET /api/recipes/count`
 
 ## Project layout
@@ -65,11 +66,22 @@ Start the development server:
 flask --app wsgi run
 ```
 
-`wsgi.py` only creates and exposes the app using `create_app("development")`. Configuration, extension setup, blueprint registration, required-secret validation, and table initialization are handled by the factory and `init_db(app)`. `init_db` uses the configured database and `db.create_all()`, which creates missing tables without deleting existing ones.
+`wsgi.py` only creates and exposes the app using `create_app("development")`. Configuration, extension setup, required-secret validation, blueprint registration, and table initialization are handled by the factory and `init_db(app)`.
+
+## Rate limiting
+
+Flask-Limiter is registered through the application factory in `app/__init__.py`. Only the account endpoints have per-route limits:
+
+- `POST /login`: 5 requests per minute per client IP.
+- `POST /register`: 3 requests per hour per client IP.
+
+Recipe reads are not rate-limited in this lesson. The limits help slow repeated password guesses and signup spam, but a legitimate user can temporarily hit a limit. When that happens, the server returns `429 Too Many Requests`. With headers enabled, look for `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `Retry-After` to understand the configured quota, remaining requests, and wait time. Header availability and exact formatting can depend on the installed Flask-Limiter version and configuration.
+
+See [RATE_LIMITING_LAB.md](RATE_LIMITING_LAB.md) for the repeat-request exercise and evidence checklist.
 
 ## Layer responsibilities
 
-- `app/auth/routes.py`: parses account HTTP requests and formats JSON responses.
+- `app/auth/routes.py`: parses account HTTP requests, applies endpoint limits, and formats JSON responses.
 - `app/services/auth_service.py`: registration/login validation and account workflow.
 - `app/recipes/routes.py`: parses recipe HTTP requests and formats JSON responses.
 - `app/services/recipe_service.py`: recipe validation, update/delete workflow, and count feature.
