@@ -69,3 +69,30 @@ Registration never allows a client to choose admin. Use the included make_admin.
 JWT payloads are readable by anyone holding the token, so passwords and other secrets never belong in the payload. The API trusts user_id and role only after the JWT signature and expiration are verified.
 
 The shared decorators keep authentication and owner/admin checks out of the individual write routes so a route cannot accidentally skip the security checks.
+
+## Recipe-list caching and invalidation
+
+The public `GET /recipes` endpoint uses Flask-Caching with `SimpleCache` and a 30-second timeout. Query strings are included in the cache key. The list contains public recipes only.
+
+Successful recipe writes clear the cache **after** the database commit:
+- `POST /recipes`
+- `PATCH /recipes/<recipe_id>`
+- `DELETE /recipes/<recipe_id>`
+
+That means the next `GET /recipes` should reflect a successful create, edit, or delete immediately instead of serving the old list. `SimpleCache` is in-process memory storage, so it is best suited to local development or a single-process app.
+
+Install dependencies and run the app:
+
+```bash
+pip install -r requirements.txt
+flask --app app run
+```
+
+Check the list twice and compare response times:
+
+```bash
+curl -i http://localhost:5000/recipes
+curl -i http://localhost:5000/recipes
+```
+
+For a full write-and-refresh smoke check, see [CACHE_INVALIDATION_LAB.md](CACHE_INVALIDATION_LAB.md). Endpoints that should not be cached are listed in [NEVER_CACHE_ENDPOINTS.md](NEVER_CACHE_ENDPOINTS.md).
