@@ -1,6 +1,6 @@
 # Smoke and Security Test Plan
 
-These are expected outcomes. Mark actual results only after running the services locally.
+This plan records the expected behavior for the Flask microservices recipe API.
 
 | ID | Action | Expected |
 | --- | --- | --- |
@@ -20,4 +20,8 @@ These are expected outcomes. Mark actual results only after running the services
 
 ## Result record
 
-Execution status: **Not run by GitHub integration**. The expected outcomes above are not actual test results. Run the tests on your machine and replace this line with the date, environment, and observed pass/fail details.
+**User-reported verification:** The user confirmed that they verified the expected results for the requested 10 steps.
+
+**Verification scope:** This entry records the user's confirmation. No independent execution logs or automated test report were available to attach here, so this file does not claim that GitHub or this assistant ran the tests.
+
+**Next step:** If you want a reproducible test record, run the checks against the services and add the execution date, environment, and observed pass/fail results.
