@@ -1,4 +1,4 @@
-"""Demo Flask app for comparing sequential and concurrent outbound HTTP calls.
+"""Demo Flask app for concurrent outbound HTTP calls with fallbacks.
 
 Run the nutrition API on port 5001 first, then run this app on port 5002.
 """
@@ -13,27 +13,50 @@ from flask import Flask, jsonify, request
 app = Flask(__name__)
 DOWNSTREAM_URL = os.getenv("NUTRITION_API_URL", "http://127.0.0.1:5001")
 INGREDIENTS = ["eggs", "milk", "rice"]
+REQUEST_TIMEOUT_SECONDS = 3.0
+
+
+def fallback_result(ingredient, status, message):
+    """Return a predictable, clearly labeled placeholder when a call fails."""
+    return {
+        "ingredient": ingredient,
+        "status": status,
+        "source": "fallback",
+        "fallback": True,
+        "data": {
+            "calories": None,
+            "note": "Nutrition data is unavailable; no estimate is being provided.",
+        },
+        "error": message,
+    }
 
 
 async def fetch_nutrition(client, ingredient):
     url = f"{DOWNSTREAM_URL}/nutrition/{quote(ingredient, safe='')}"
-    response = await client.get(url)
-    response.raise_for_status()
-    return {
-        "ingredient": ingredient,
-        "status": response.status_code,
-        "body": response.json(),
-    }
+    try:
+        response = await client.get(url)
+        response.raise_for_status()
+        return {
+            "ingredient": ingredient,
+            "status": response.status_code,
+            "source": "api",
+            "fallback": False,
+            "data": response.json(),
+        }
+    except httpx.TimeoutException:
+        return fallback_result(
+            ingredient, "timeout", "The nutrition service took too long to respond."
+        )
+    except (httpx.RequestError, httpx.HTTPStatusError, ValueError) as exc:
+        return fallback_result(ingredient, "error", str(exc))
 
 
 @app.get("/recipes/async-demo")
 async def async_demo():
-    """Call the downstream API three times concurrently and return partial results."""
+    """Call the downstream API concurrently and return a result for each ingredient."""
     started = time.perf_counter()
-    results = []
 
-    timeout_seconds = 3.0
-    async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
         tasks = [
             asyncio.create_task(fetch_nutrition(client, ingredient))
             for ingredient in INGREDIENTS
@@ -45,46 +68,12 @@ async def async_demo():
             await asyncio.sleep(0.1)
             time.sleep(1.0)  # Simulates a blocking database call; not for production.
 
-        try:
-            # wait_for bounds the overall wait. gather preserves input order.
-            results = await asyncio.wait_for(
-                asyncio.gather(*tasks, return_exceptions=True),
-                timeout=timeout_seconds,
-            )
-        except asyncio.TimeoutError:
-            # A whole-operation timeout can cancel unfinished work. Keep any
-            # completed task results and label requests that did not finish.
-            for ingredient, task in zip(INGREDIENTS, tasks):
-                if task.done() and not task.cancelled():
-                    try:
-                        results.append(task.result())
-                    except Exception as exc:
-                        results.append({
-                            "ingredient": ingredient,
-                            "status": "error",
-                            "error": str(exc),
-                        })
-                else:
-                    results.append({
-                        "ingredient": ingredient,
-                        "status": "timeout",
-                    })
-
-    normalized = []
-    for ingredient, result in zip(INGREDIENTS, results):
-        if isinstance(result, Exception):
-            normalized.append({
-                "ingredient": ingredient,
-                "status": "error",
-                "error": str(result),
-            })
-        else:
-            normalized.append(result)
+        results = await asyncio.gather(*tasks)
 
     return jsonify({
-        "results": normalized,
+        "results": results,
         "elapsed_seconds": round(time.perf_counter() - started, 3),
-        "all_succeeded": all(item.get("status") == 200 for item in normalized),
+        "all_succeeded": all(item.get("status") == 200 for item in results),
         "blocking_demo_enabled": request.args.get("blocking") == "1",
     })
 
