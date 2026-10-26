@@ -5,6 +5,7 @@ from functools import wraps
 import jwt
 from dotenv import load_dotenv
 from flask import Flask, g, jsonify, request
+from flask_caching import Cache
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -15,8 +16,11 @@ app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
     "DATABASE_URL", "sqlite:///recipe_api.db"
 )
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["CACHE_TYPE"] = "SimpleCache"
+app.config["CACHE_DEFAULT_TIMEOUT"] = 30
 
 db = SQLAlchemy(app)
+cache = Cache(app)
 
 JWT_SECRET = os.getenv("JWT_SECRET")
 JWT_ALGORITHM = "HS256"
@@ -198,6 +202,22 @@ def login():
     ), 200
 
 
+@app.get("/recipes")
+@cache.cached(timeout=30, query_string=True)
+def list_recipes():
+    # Only public recipes are listed here, so cached responses never expose private recipes.
+    recipes = Recipe.query.filter_by(is_public=True).order_by(Recipe.id.asc()).all()
+    return jsonify([
+        {
+            "id": recipe.id,
+            "title": recipe.title,
+            "is_public": recipe.is_public,
+            "owner_id": recipe.owner_id,
+        }
+        for recipe in recipes
+    ]), 200
+
+
 @app.get("/recipes/<int:recipe_id>")
 def get_recipe(recipe_id):
     recipe = db.session.get(Recipe, recipe_id)
@@ -264,6 +284,7 @@ def create_recipe():
 
     db.session.add(recipe)
     db.session.commit()
+    cache.clear()
 
     return jsonify(
         {
@@ -295,6 +316,7 @@ def update_recipe(recipe_id):
         recipe.is_public = is_public
 
     db.session.commit()
+    cache.clear()
 
     return jsonify(
         {
@@ -312,9 +334,11 @@ def update_recipe(recipe_id):
 def delete_recipe(recipe_id):
     recipe = g.recipe
     db.session.delete(recipe)
+    recipe_id = recipe.id
     db.session.commit()
+    cache.clear()
 
-    return jsonify({"message": "Recipe deleted", "id": recipe.id}), 200
+    return jsonify({"message": "Recipe deleted", "id": recipe_id}), 200
 
 
 with app.app_context():
