@@ -4,3 +4,4 @@ PyJWT
 python-dotenv
 Werkzeug
 pytest
+Flask-Caching==2.3.1
