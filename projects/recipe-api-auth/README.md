@@ -1,51 +1,20 @@
-# Recipe API — JWT Auth, Ownership & Admin Authorization
+# Recipe API — JWT Auth, Ownership, and Ratings
 
-A Flask + SQLite recipe API with a package layout and route/service/data layers.
+A Flask + SQLite API using an application factory and separate route, service, and data/model layers.
 
-## What this project demonstrates
+## Features
 
 - Password hashing, registration, and JWT login
 - Shared authentication and owner/admin authorization
 - Public and private recipe visibility
-- Application factory with named configurations
-- Environment-based secrets and local-only `.env`
-- Route modules for HTTP translation, services for business rules, and data helpers for persistence
-- Rate limiting on login and registration to reduce brute-force attempts and signup spam
-- New layered endpoint: `GET /api/recipes/count`
+- Named application configurations
+- Environment-based secrets
+- Rate limiting for account endpoints and rating submissions
+- Recipe count endpoint
+- Recipe ratings with one rating per user per recipe, 1–5 score validation, and average/count reads
+- Flask-Migrate/Alembic database migrations
 
-## Project layout
-
-```text
-recipe-api-auth/
-├── app/
-│   ├── __init__.py
-│   ├── config.py
-│   ├── extensions.py
-│   ├── auth/
-│   │   ├── routes.py
-│   │   ├── passwords.py
-│   │   ├── tokens.py
-│   │   └── guards.py
-│   ├── recipes/
-│   │   ├── routes.py
-│   │   └── policies.py
-│   ├── services/
-│   │   ├── auth_service.py
-│   │   └── recipe_service.py
-│   ├── data/
-│   │   ├── db.py
-│   │   ├── models.py
-│   │   ├── users.py
-│   │   └── recipes.py
-│   └── web/routes.py
-├── instance/                 # local SQLite database is created here
-├── tests/
-├── wsgi.py
-├── requirements.txt
-└── .env.example
-```
-
-## Configuration and startup
+## Setup
 
 Run commands from `projects/recipe-api-auth`:
 
@@ -56,42 +25,29 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Edit `.env` and set `JWT_SECRET` to a long, random value. Never commit `.env`; `.gitignore` excludes it. Commit `.env.example` with placeholders only.
+Edit `.env` and set `JWT_SECRET` to a long, random value. Never commit `.env`; use the placeholder values in `.env.example`.
 
-The default SQLite URL is `sqlite:///recipes.db`, which Flask-SQLAlchemy resolves under the app's `instance/` directory. Override `DATABASE_URL` for a different database. The testing configuration uses an isolated in-memory SQLite database.
+## Database migrations
 
-Start the development server:
+Apply the schema before starting the server:
+
+```bash
+flask --app wsgi db upgrade
+flask --app wsgi db current
+```
+
+The migration creates the rating table and its primary key, foreign keys, score check constraint, and unique user/recipe constraint. It also creates the existing user and recipe tables when initializing a fresh database. Existing databases keep their current user and recipe tables.
+
+## Run and test
 
 ```bash
 flask --app wsgi run
+pytest -q
 ```
 
-`wsgi.py` only creates and exposes the app using `create_app("development")`. Configuration, extension setup, required-secret validation, blueprint registration, and table initialization are handled by the factory and `init_db(app)`.
+Run the tests in your local environment and use the actual output when reporting pass counts.
 
-## Rate limiting
-
-Flask-Limiter is registered through the application factory in `app/__init__.py`. Only the account endpoints have per-route limits:
-
-- `POST /login`: 5 requests per minute per client IP.
-- `POST /register`: 3 requests per hour per client IP.
-
-Recipe reads are not rate-limited in this lesson. The limits help slow repeated password guesses and signup spam, but a legitimate user can temporarily hit a limit. When that happens, the server returns `429 Too Many Requests`. With headers enabled, look for `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `Retry-After` to understand the configured quota, remaining requests, and wait time. Header availability and exact formatting can depend on the installed Flask-Limiter version and configuration.
-
-See [RATE_LIMITING_LAB.md](RATE_LIMITING_LAB.md) for the repeat-request exercise and evidence checklist.
-
-## Layer responsibilities
-
-- `app/auth/routes.py`: parses account HTTP requests, applies endpoint limits, and formats JSON responses.
-- `app/services/auth_service.py`: registration/login validation and account workflow.
-- `app/recipes/routes.py`: parses recipe HTTP requests and formats JSON responses.
-- `app/services/recipe_service.py`: recipe validation, update/delete workflow, and count feature.
-- `app/data/users.py` and `app/data/recipes.py`: database queries and writes.
-- `app/data/db.py`: database table initialization.
-- `app/config.py`: named configuration classes and environment-backed settings.
-
-## Existing API contract
-
-The refactor keeps the existing endpoint paths and response contracts:
+## Existing API
 
 - `GET /health`
 - `POST /register`
@@ -100,49 +56,45 @@ The refactor keeps the existing endpoint paths and response contracts:
 - `POST /recipes`
 - `PATCH /recipes/<recipe_id>`
 - `DELETE /recipes/<recipe_id>`
+- `GET /api/recipes/count`
 
-The original API does not have a `GET /recipes` collection endpoint. The new feature is added separately at `GET /api/recipes/count`, returning `{"count": <integer>}`.
+The original API does not have a `GET /recipes` collection endpoint.
 
-## Smoke checks
+## Rating API
 
-Register:
-
-```bash
-curl -i -X POST http://127.0.0.1:5000/register \
-  -H "Content-Type: application/json" \
-  -d '{"username":"smoke-check-user","password":"SmokePass123!"}'
-```
-
-Log in:
+### Submit or update a rating
 
 ```bash
-curl -i -X POST http://127.0.0.1:5000/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"smoke-check-user","password":"SmokePass123!"}'
-```
-
-Use the returned token to create a recipe:
-
-```bash
-curl -i -X POST http://127.0.0.1:5000/recipes \
+curl -i -X POST http://127.0.0.1:5000/api/recipes/1/ratings \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
-  -d '{"title":"Smoke check recipe","is_public":true}'
+  -d '{"score":5}'
 ```
 
-Read a specific recipe using the ID returned above:
+The authenticated user's ID comes from the verified JWT request context. A score must be an integer from 1 to 5. A missing/invalid score returns 400, a nonexistent recipe returns 404, and missing or invalid authentication returns 401. Submitting another score for the same recipe updates the user's existing rating.
+
+### Read rating summary
 
 ```bash
-curl -i http://127.0.0.1:5000/recipes/RECIPE_ID
+curl -i http://127.0.0.1:5000/api/recipes/1/ratings
 ```
 
-Check the new count endpoint:
+The response includes `recipe_id`, `average_rating`, and `rating_count`. If a recipe has no ratings, the average is `null` and the count is zero.
 
-```bash
-curl -i http://127.0.0.1:5000/api/recipes/count
-```
+## Scaling decision
 
-Run automated tests with `pytest`. Runtime verification should be reported from actual test and HTTP output; expected outcomes should not be represented as captured results.
+The project uses Flask-Limiter with `get_remote_address`, so the rating write limit is 10 requests per minute per client IP. This reduces repeated submissions and unnecessary writes. The read endpoint uses SQL aggregate functions rather than loading all ratings into Python. Caching is not enabled for the rating summary so changes are reflected immediately; repeated reads still query the database, which can be optimized later if usage grows.
+
+## Architecture
+
+- `app/recipes/routes.py`: HTTP routes and JSON responses.
+- `app/services/recipe_service.py`: recipe business logic.
+- `app/services/rating_service.py`: rating validation, create/update behavior, and rating summary.
+- `app/data/models.py`: SQLAlchemy models and relationships.
+- `app/extensions.py`: SQLAlchemy, Flask-Migrate, and Flask-Limiter extensions.
+- `app/auth/guards.py`: shared authentication and authorization guards.
+- `migrations/`: Alembic migration environment and revision files.
+- `tests/`: automated API tests.
 
 ## Authorization rules
 
@@ -150,4 +102,4 @@ Run automated tests with `pytest`. Runtime verification should be reported from 
 - Valid token without permission -> 403.
 - Owners can update/delete their own recipes; admins can update/delete any recipe.
 - Registration always assigns role `user`.
-- Recipe ownership is assigned from the verified token identity, not client input.
+- Recipe ownership and rating ownership are derived from the authenticated identity, not request-body user IDs.
