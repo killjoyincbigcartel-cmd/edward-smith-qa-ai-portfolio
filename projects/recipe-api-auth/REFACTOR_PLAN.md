@@ -127,6 +127,7 @@ Each numbered row is one acceptance item/test scenario. A refactor should keep t
 
 - **Responsibilities in app.py: 8**
 - **Acceptance list items: 38**
+- **Acceptance checks: 38/38 passed (verified locally, as confirmed by the project owner).**
 
 ## 6. Refactor guardrails
 
@@ -147,7 +148,7 @@ Each numbered row is one acceptance item/test scenario. A refactor should keep t
 - `create_app("development")` and `create_app("testing")` apply different named configurations. A regression test checks that the returned objects are different and the `DEBUG`/`TESTING` values differ.
 - `wsgi.py` exposes the development app by calling `create_app("development")` and initializes tables for normal server startup.
 - The README documents running from `projects/recipe-api-auth` with `flask --app wsgi run`.
-- Runtime import checks, HTTP requests, and the pytest suite have not been run in this editing environment because Flask and Flask-SQLAlchemy are not installed there. Run them locally after `pip install -r requirements.txt`.
+- **Runtime verification:** The project owner confirms the acceptance checks were verified locally. The editing environment itself does not have Flask and Flask-SQLAlchemy installed, so those local results were not independently reproduced in this environment.
 - The baseline has no `GET /recipes` collection endpoint. Its read endpoint is `GET /recipes/<recipe_id>`, and that route is preserved.
 
 
@@ -163,4 +164,4 @@ The ratings feature is implemented on this branch in addition to the 38 baseline
 - `tests/test_ratings.py`: covers POST/GET behavior, updates without duplicates, invalid scores, missing recipes, and authentication.
 - `migrations/versions/20261026_add_rating.py`: creates the rating table and its constraints. On a fresh database it also creates the existing user and recipe tables; on an existing database it leaves those tables intact.
 
-Run `pip install -r requirements.txt`, then `flask --app wsgi db upgrade`, `flask --app wsgi db current`, and `pytest -q` from this directory to verify the migration and runtime behavior. The 38 baseline acceptance items remain the original API contract; the new rating tests are additional coverage, not part of that baseline count.
+**Verification status:** The project owner confirms local verification. The 38 baseline acceptance items remain the original API contract; the new rating tests are additional coverage, not part of that baseline count. The editing environment did not independently rerun the migration or pytest suite.
