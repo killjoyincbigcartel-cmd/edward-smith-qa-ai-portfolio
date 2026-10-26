@@ -32,17 +32,19 @@ async def async_demo():
     started = time.perf_counter()
     results = []
 
-    # Optional switch for demonstrating how blocking work delays async progress.
-    # Example: /recipes/async-demo?blocking=1
-    if request.args.get("blocking") == "1":
-        time.sleep(1.0)  # Simulates a blocking database call; do not use in production.
-
     timeout_seconds = 3.0
     async with httpx.AsyncClient(timeout=timeout_seconds) as client:
         tasks = [
             asyncio.create_task(fetch_nutrition(client, ingredient))
             for ingredient in INGREDIENTS
         ]
+        # Optional switch for demonstrating how blocking work delays async progress.
+        # Let the requests begin before blocking this event-loop thread.
+        # Example: /recipes/async-demo?blocking=1
+        if request.args.get("blocking") == "1":
+            await asyncio.sleep(0.1)
+            time.sleep(1.0)  # Simulates a blocking database call; not for production.
+
         try:
             # wait_for bounds the overall wait. gather preserves input order.
             results = await asyncio.wait_for(
