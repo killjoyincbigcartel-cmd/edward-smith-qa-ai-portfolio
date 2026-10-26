@@ -7,7 +7,7 @@ from app.auth.tokens import create_token
 from app.config import CONFIG_BY_NAME, Config
 from app.data.db import init_db
 from app.data.models import Recipe, User
-from app.extensions import db
+from app.extensions import db, limiter
 from app.recipes.routes import recipes_bp
 from app.web.routes import web_bp
 
@@ -36,6 +36,7 @@ def create_app(config_name="development", config_overrides=None):
         raise RuntimeError("JWT_SECRET is required. Put it in .env.")
 
     db.init_app(flask_app)
+    limiter.init_app(flask_app)
     flask_app.register_blueprint(web_bp)
     flask_app.register_blueprint(auth_bp)
     flask_app.register_blueprint(recipes_bp)
