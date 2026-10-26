@@ -22,6 +22,7 @@ I build and test responsive web applications, REST APIs, databases, and SaaS wor
 | Project | Focus | What it demonstrates |
 | --- | --- | --- |
 | [Movies REST API](projects/movies-rest-api.md) | Python, Flask, SQLite, Postman | CRUD design, validation, SQL safety, persistence, API test coverage |
+| [Flask Microservices Recipe API](projects/flask-microservices-recipe-api/README.md) | Flask, JWT, SQLAlchemy, Flask-Migrate | Service boundaries, separate databases, gateway routing, authentication, and recipe ownership checks |
 | [WE Recover](projects/we-recover.md) | SaaS product design and QA | Multi-user workflows, dashboards, account separation, analytics, and notification testing |
 | [SOLE//FINDER](projects/sole-finder.md) | React, Vite, responsive QA | Search, filters, favorites, external links, mobile behavior, and image reliability |
 | [AI Resume Helper & Web Automation](projects/ai-resume-helper.md) | Python, Playwright, AI workflow | Dynamic-content automation, validation, and practical AI-assisted tooling |
@@ -54,4 +55,3 @@ See the [AI engineering roadmap](ai-engineering/README.md) for the skills and pr
 - Email: killjoyinc.bigcartel@gmail.com
 
 Client project summaries describe my work at a high level and intentionally exclude private source code, credentials, customer data, and confidential business information.
-
