@@ -5,7 +5,6 @@ from app.auth.passwords import hash_password, verify_password
 from app.auth.routes import auth_bp
 from app.auth.tokens import create_token
 from app.config import CONFIG_BY_NAME, Config
-from app.data.db import init_db
 from app.data.models import Rating, Recipe, User
 from app.extensions import db, limiter, migrate
 from app.recipes.routes import recipes_bp
@@ -39,9 +38,6 @@ def create_app(config_name="development", config_overrides=None):
     flask_app.register_blueprint(web_bp)
     flask_app.register_blueprint(auth_bp)
     flask_app.register_blueprint(recipes_bp)
-
-    # Preserve existing startup behavior while enabling versioned migrations.
-    init_db(flask_app)
     return flask_app
 
 
