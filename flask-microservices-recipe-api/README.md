@@ -100,6 +100,17 @@ curl -i http://localhost:5002/internal/health \
 
 Expected contract is also HTTP 403 with the same error body. Use the configured real internal token only in a local terminal; do not paste it into reports or commit it.
 
+## Admin acceptance cases
+
+Registration always creates `role=user`. For local acceptance testing only, promote a disposable account directly in the users database, then log in again so the newly issued JWT contains the admin role:
+
+```bash
+python -m users_service.make_admin challenge-user
+# Log in again through the gateway and replace USER_JWT with the new token.
+```
+
+Do not use this helper as a public endpoint or for production account administration.
+
 ## Cache and invalidation
 
 The public recipes list uses Flask-Caching `SimpleCache` with a 30-second timeout. Successful recipe creation, update, and deletion clear the cache after the database commit. To check invalidation, read `GET /recipes`, update a public test recipe with `PATCH /recipes/<id>`, and read `GET /recipes` again. The final response should contain the updated value.
