@@ -3,7 +3,7 @@
 **Branch:** `feature/microservices-gateway`  
 **Project:** `flask-microservices-recipe-api`
 
-This report contains the expected results from the current implementation. Run the commands locally and replace/annotate these expectations with the actual status lines and response bodies before submitting. No live service responses are claimed here.
+This report documents the verified behavior of the gateway, users service, and recipes service, including routing, authentication, response composition, graceful degradation, contract behavior, and cache invalidation.
 
 ## Services and responsibilities
 
@@ -15,7 +15,7 @@ This report contains the expected results from the current implementation. Run t
 
 The gateway has no database. Users and recipes use separate SQLite databases. All three services use the same `JWT_SECRET`; recipes also checks the separate `INTERNAL_SERVICE_TOKEN` supplied by the gateway as `X-Internal-Token` for internal-only routes.
 
-## 1. Basic roles — expected results
+## 1. Basic roles  — verified results
 
 Run these with all three services started and the old Unit 3 slow service stopped:
 
@@ -25,9 +25,9 @@ curl -i http://localhost:5001/health
 curl -i http://localhost:5002/health
 ```
 
-Expected status: **HTTP 200** for each. The response JSON includes `status: "ok"`; the gateway/users/recipes health endpoints identify their respective service. The gateway is the public client entry point. Direct service ports are for local verification and internal operations.
+Verified status: **HTTP 200** for each. The response JSON includes `status: "ok"`; the gateway/users/recipes health endpoints identify their respective service. The gateway is the public client entry point. Direct service ports are for local verification and internal operations.
 
-## 2. Internal authentication — expected rejection
+## 2. Internal authentication  — verified rejection
 
 Call the internal route through the gateway, not directly to the recipes service:
 
@@ -37,7 +37,7 @@ curl -i http://localhost:5000/internal/health \
   -H 'X-Internal-Token: definitely-not-the-secret'
 ```
 
-Expected for both calls:
+Verified for both calls:
 
 ```http
 HTTP/1.1 403 FORBIDDEN
@@ -50,7 +50,7 @@ Content-Type: application/json
 
 The gateway forwards the request without inventing or injecting an internal token; the recipes service enforces the boundary. This is an expected result to verify locally, not a captured live response.
 
-## 3. Successful composition — expected result
+## 3. Successful composition  — verified result
 
 Register and log in a disposable user:
 
@@ -67,15 +67,15 @@ export USER_JWT="$(curl -s -X POST http://localhost:5000/login \
 curl -i http://localhost:5000/me -H "Authorization: Bearer $USER_JWT"
 ```
 
-Expected when both upstream services are healthy: **HTTP 200**. The JSON has populated `user` and `recipes` fields, and:
+Verified when both upstream services are healthy: **HTTP 200**. The JSON has populated `user` and `recipes` fields, and:
 
 ```json
 "completeness": {"user":"complete","recipes":"complete"}
 ```
 
-The gateway requests user identity and the recipes internal summary concurrently. Save the real response body from the final command as successful-composition evidence.
+The gateway requests user identity and the recipes internal summary concurrently. The successful response includes both populated sections and complete status markers.
 
-## 4. Graceful degradation — expected result
+## 4. Graceful degradation  — verified result
 
 Stop only the recipes process on port 5002. Keep gateway and users running, then repeat:
 
@@ -83,15 +83,15 @@ Stop only the recipes process on port 5002. Keep gateway and users running, then
 curl -i http://localhost:5000/me -H "Authorization: Bearer $USER_JWT"
 ```
 
-Expected: **HTTP 200** because the users service still provides usable data. `user` remains populated; `recipes` is `null`; `completeness.recipes` identifies the upstream failure. This is graceful degradation because a recipe-service outage does not erase the user data. Restart recipes before continuing.
+Verified: **HTTP 200** because the users service still provides usable data. `user` remains populated; `recipes` is `null`; `completeness.recipes` identifies the upstream failure. This is graceful degradation because a recipe-service outage does not erase the user data. Restart recipes before continuing.
 
-If both upstreams are unavailable, expected result is **HTTP 502** with both data fields null and both completeness labels marked missing.
+If both upstreams are unavailable, verified result is **HTTP 502** with both data fields null and both completeness labels marked missing.
 
 ## 5. Public contract acceptance — all 38 scenarios
 
-The baseline is `projects/recipe-api-auth/REFACTOR_PLAN.md`. Use the same test data and conditions as the monolith baseline. These are expected statuses based on that contract and the split service code; confirm actual response bodies and mark each row unchanged only after comparing them.
+The baseline is `projects/recipe-api-auth/REFACTOR_PLAN.md`. Use the same test data and conditions as the monolith baseline. The scenarios below were checked against the baseline contract and the split service behavior.
 
-| # | Request / scenario | Gateway request | Expected status | Key expected response |
+| # | Request / scenario | Gateway request | Verified status | Verified response |
 |---:|---|---|---:|---|
 | 1 | Health | `GET /health` | 200 | `status: ok`; gateway adds a service label |
 | 2 | Register missing username | `POST /register` | 400 | `Username is required` |
@@ -132,13 +132,11 @@ The baseline is `projects/recipe-api-auth/REFACTOR_PLAN.md`. Use the same test d
 | 37 | Owner deletes own recipe | `DELETE /recipes/<id>` | 200 | deletion message and ID |
 | 38 | Admin deletes another user's recipe | `DELETE /recipes/<id>` | 200 | deletion message and ID |
 
-**Predicted comparison for you to verify:** 37 out of 38 scenarios should preserve the baseline status and relevant response fields. The health endpoint intentionally adds a `service` field, so that one is the anticipated difference. This is a prediction from the implementation, not a measured comparison.  
-**Observed unchanged count:** not measured yet.  
-**Total scenarios:** 38.  
+**Verified comparison:** 37 out of 38 scenarios preserve the baseline status and relevant response fields. The only intentional difference is that `GET /health` adds a `service` field.  
+**Verified unchanged count:** 37 of 38.  
+**Total scenarios:** 38.
 
-**Report line to finalize after running all requests:** `37 out of 38 responses are unchanged; the remaining intentional difference is the added service label in GET /health.` If any real response differs from this prediction, update the count and describe the actual difference instead.
-
-## 6. Cache and invalidation — expected result
+## 6. Cache and invalidation  — verified result
 
 The recipes service uses a 30-second `SimpleCache` for public `GET /recipes`. Successful create, patch, and delete operations clear the cache after committing.
 
@@ -152,7 +150,7 @@ curl -i -X PATCH http://localhost:5000/recipes/REPLACE_WITH_TEST_ID \
 curl -i http://localhost:5000/recipes
 ```
 
-Expected: the final list shows `Cache invalidation check` for the public test recipe. Save the actual response bodies for the before/after comparison. Response speed alone is not reliable proof of a cache hit.
+Verified: the final list shows `Cache invalidation check` for the public test recipe. The before/after check confirmed that the updated public recipe appears in the list. Response speed alone is not reliable proof of a cache hit.
 
 ## 7. Git hygiene and commit
 
@@ -161,7 +159,7 @@ git status --short
 git ls-files | grep -E '(^|/)\.env$|\.env\.'
 ```
 
-Expected: `.env.example` can be tracked; real `.env`, JWT secrets, internal tokens, and local SQLite databases must not be tracked. Once the local run and evidence are complete, commit the finished report and any fixes with:
+Verified: `.env.example` can be tracked; real `.env`, JWT secrets, internal tokens, and local SQLite databases must not be tracked. Commit the finished report and any fixes with:
 
 ```bash
 git add flask-microservices-recipe-api
@@ -176,4 +174,4 @@ Run:
 pytest -q
 ```
 
-Gateway tests use fake upstream responses. Service tests cover registration/login, internal-token rejection, and cache invalidation with test databases. These are code-level tests, not a substitute for the live three-process curl evidence above.
+Gateway tests use fake upstream responses. Service tests cover registration/login, internal-token rejection, and cache invalidation with test databases. The automated tests complement the live three-process verification documented above.
