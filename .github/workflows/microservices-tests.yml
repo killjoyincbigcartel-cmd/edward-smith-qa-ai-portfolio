@@ -1,0 +1,33 @@
+name: Microservices gateway tests
+
+on:
+  push:
+    branches:
+      - feature/microservices-gateway
+  pull_request:
+    branches:
+      - feature/microservices-gateway
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flask-microservices-recipe-api
+    env:
+      JWT_SECRET: ci-test-jwt-secret
+      INTERNAL_SERVICE_TOKEN: ci-test-internal-token
+      RECIPES_INTERNAL_TOKEN: ci-test-internal-token
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run unit and service tests
+        run: pytest -q
