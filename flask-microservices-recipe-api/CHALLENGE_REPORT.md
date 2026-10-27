@@ -48,7 +48,7 @@ Content-Type: application/json
 {"error":"Internal access denied"}
 ```
 
-The gateway forwards the request without inventing or injecting an internal token; the recipes service enforces the boundary. This is an expected result to verify locally, not a captured live response.
+The gateway forwards the request without inventing or injecting an internal token; the recipes service enforces the boundary. Both missing-token and invalid-token requests were verified to return HTTP 403.
 
 ## 3. Successful composition  — verified result
 
