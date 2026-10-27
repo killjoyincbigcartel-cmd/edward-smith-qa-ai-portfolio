@@ -1,20 +1,12 @@
 # Flask Microservices Recipe API
 
-This folder contains the API gateway for a split Flask recipe API. The gateway owns no database and defines no ORM models; it forwards requests to the users and recipes services.
+This folder contains three independent Flask apps:
 
-## Expected services
+- **Gateway** on port 5000: public entry point and response composition.
+- **Users service** on port 5001: registration, login, password hashes, and JWT issuance/validation.
+- **Recipes service** on port 5002: recipe CRUD, visibility/ownership checks, cache, and internal-only summary endpoint.
 
-- Users service: `http://localhost:5001`
-- Recipes service: `http://localhost:5002`
-- Gateway: `http://localhost:5000`
-
-The upstream services are expected to expose:
-
-- `POST /login` on the users service, accepting the login JSON and returning a JSON response.
-- `GET /me` on the users service, validating the forwarded user JWT and returning the current user's JSON.
-- `GET /recipes` on the recipes service, validating the forwarded user JWT and, if required by your internal endpoint policy, the `X-Internal-Token` header.
-
-If your existing services use different paths or response schemas, update the URLs in `gateway/routes.py` to match them.
+The services use separate SQLite databases. The gateway has no database or ORM models.
 
 ## Setup
 
@@ -27,54 +19,95 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Edit `.env`. Set `RECIPES_INTERNAL_TOKEN` to the same secret value the recipes service expects as `INTERNAL_SERVICE_TOKEN`. Keep the real `.env` out of Git.
+Edit `.env`. Use long, random, different values for `JWT_SECRET` and `INTERNAL_SERVICE_TOKEN`. `RECIPES_INTERNAL_TOKEN` must match `INTERNAL_SERVICE_TOKEN`. Never commit `.env`, real tokens, or database files.
 
-## Run three processes
+## Start all three services
 
-Open three terminals. Activate the same virtual environment in each.
+Open three terminals. In each, change to this folder and activate `.venv`.
 
-Terminal 1 (from the directory containing your users service):
+Terminal 1:
 
 ```bash
-flask --app users_service run -p 5001
+flask --app users_service:create_app run --port 5001
 ```
 
-Terminal 2 (from the directory containing your recipes service):
+Terminal 2:
 
 ```bash
-flask --app recipes_service run -p 5002
+flask --app recipes_service:create_app run --port 5002
 ```
 
-Terminal 3 (from `flask-microservices-recipe-api/`):
+Terminal 3:
 
 ```bash
-flask --app gateway run -p 5000
+flask --app gateway:create_app run --port 5000
 ```
 
-The users and recipes commands assume those packages expose a Flask app or app factory compatible with Flask CLI.
+Stop the old Unit 3 slow service before running the challenge. The commands above start the new users, recipes, and gateway processes.
 
-## Test through the gateway
-
-Login (adjust the request fields to match your users service):
+## Quick smoke check
 
 ```bash
-curl -i -X POST http://localhost:5000/login \
+curl -i http://localhost:5000/health
+curl -i http://localhost:5001/health
+curl -i http://localhost:5002/health
+curl -i http://localhost:5000/recipes
+```
+
+Create a disposable test account through the gateway:
+
+```bash
+curl -i -X POST http://localhost:5000/register \
   -H 'Content-Type: application/json' \
-  -d '{"email":"you@example.com","password":"YOUR_PASSWORD"}'
+  -d '{"username":"challenge-user","password":"replace-this-test-password"}'
 ```
 
-Use the returned JWT:
+Log in and save the returned JWT in your shell:
 
 ```bash
-curl -i http://localhost:5000/me \
-  -H 'Authorization: Bearer YOUR_USER_JWT'
+export USER_JWT="$(curl -s -X POST http://localhost:5000/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"challenge-user","password":"replace-this-test-password"}' | python -c 'import json,sys; print(json.load(sys.stdin)["token"])')"
+curl -i http://localhost:5000/me -H "Authorization: Bearer $USER_JWT"
 ```
 
-The `/me` response combines the user and recipes sections. Each section has its own `completeness` label. One upstream timeout or failure does not prevent the gateway from returning the other section. If both upstream calls fail, the gateway returns HTTP 502.
+## Public routes and service boundaries
 
-## Design choices
+The gateway forwards legacy public routes to their owning service, preserving upstream status and response body:
 
-- `/me` uses `asyncio.gather` to fetch both services concurrently.
-- Each upstream call has a 1.5-second timeout by default; change `UPSTREAM_TIMEOUT` in `.env` if needed.
-- The end-user JWT is forwarded to both services. The internal token is sent only to the recipes service and is never included in the response.
-- The gateway does not create JWTs, access databases, or own business data.
+- `/register`, `/login`, and `/me` are owned by the users service. Gateway `GET /me` is the new composed endpoint, combining user details with recipe summary data.
+- `/recipes` and `/recipes/<id>` are owned by the recipes service.
+- `POST /recipes`, `PATCH /recipes/<id>`, and `DELETE /recipes/<id>` are forwarded to recipes and require a valid user JWT.
+
+The composed `GET /me` calls users `/me` and recipes `/internal/recipes/summary` concurrently. The recipes internal endpoint requires both a valid user JWT and `X-Internal-Token`. The internal token is sent only to recipes and never returned to clients. A single upstream failure produces HTTP 200 with that section set to null and a `completeness` label; if both fail, the gateway returns HTTP 502.
+
+## Internal authentication rejection
+
+Run without a token:
+
+```bash
+curl -i http://localhost:5002/internal/health
+```
+
+Expected contract: HTTP 403 and `{"error":"Internal access denied"}`.
+
+With a wrong token:
+
+```bash
+curl -i http://localhost:5002/internal/health \
+  -H 'X-Internal-Token: definitely-not-the-secret'
+```
+
+Expected contract is also HTTP 403 with the same error body. Use the configured real internal token only in a local terminal; do not paste it into reports or commit it.
+
+## Cache and invalidation
+
+The public recipes list uses Flask-Caching `SimpleCache` with a 30-second timeout. Successful recipe creation, update, and deletion clear the cache after the database commit. To check invalidation, read `GET /recipes`, update a public test recipe with `PATCH /recipes/<id>`, and read `GET /recipes` again. The final response should contain the updated value.
+
+## Tests
+
+```bash
+pytest -q
+```
+
+Gateway tests use fake upstream responses and are quick unit tests. They do not replace the live curl checks in the challenge report. Verify actual status codes and response bodies against running services before submitting the evidence.
