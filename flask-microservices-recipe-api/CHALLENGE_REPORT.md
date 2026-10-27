@@ -29,9 +29,11 @@ Expected status: **HTTP 200** for each. The response JSON includes `status: "ok"
 
 ## 2. Internal authentication — expected rejection
 
+Call the internal route through the gateway, not directly to the recipes service:
+
 ```bash
-curl -i http://localhost:5002/internal/health
-curl -i http://localhost:5002/internal/health \
+curl -i http://localhost:5000/internal/health
+curl -i http://localhost:5000/internal/health \
   -H 'X-Internal-Token: definitely-not-the-secret'
 ```
 
@@ -46,7 +48,7 @@ Content-Type: application/json
 {"error":"Internal access denied"}
 ```
 
-The endpoint checks the internal header in the recipes service. A valid token must be set locally in `.env`; never paste the secret into this report or commit it.
+The gateway forwards the request without inventing or injecting an internal token; the recipes service enforces the boundary. This is an expected result to verify locally, not a captured live response.
 
 ## 3. Successful composition — expected result
 
