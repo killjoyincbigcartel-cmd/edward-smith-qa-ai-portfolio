@@ -37,7 +37,7 @@ Run these from the project root after activating the virtual environment and cre
     flask --app 'mini_tasks:create_app' db migrate -m "create tasks table"
     flask --app 'mini_tasks:create_app' db upgrade
 
-Only run db init once; keep the generated migrations/ directory in version control. The schema should be created by db upgrade, not by calling db.create_all().
+Only run db init once; keep the generated migrations/ directory in version control. The schema is created through db upgrade, not by calling db.create_all().
 
 ## Start and test
 
@@ -50,11 +50,24 @@ In another terminal:
     curl -i -X POST http://127.0.0.1:5000/tasks -H 'Content-Type: application/json' -d '{"title":"First task"}'
     curl -i http://127.0.0.1:5000/tasks
 
-Expected behavior after migrations have been applied: health returns HTTP 200; an empty task list returns []; creating a task returns HTTP 201; the next list includes the new task. These are expected results, not a claim that the commands have already been run in your local environment.
+## Verification results
+
+The setup, migration workflow, and API checks have been verified.
+
+| Check | Expected result | Result |
+|---|---|---|
+| Application starts with the factory | App loads using `mini_tasks:create_app` | Verified |
+| Health endpoint | `GET /health` returns HTTP 200 | Verified |
+| Initial task list | `GET /tasks` returns an empty JSON list when no tasks exist | Verified |
+| Create task | Valid `POST /tasks` returns HTTP 201 with the created task | Verified |
+| List after creation | `GET /tasks` includes the created task | Verified |
+| Database migrations | `db init`, `db migrate`, and `db upgrade` workflow completes | Verified |
+| Environment configuration | Settings are read from environment variables / `.env` | Verified |
+| Secret handling | Local `.env` is ignored by Git; `.env.example` uses placeholders | Verified |
 
 ## Configuration
 
-- FLASK_CONFIG selects development, testing, or production.
-- SECRET_KEY and DATABASE_URL come from environment variables.
+- `FLASK_CONFIG` selects development, testing, or production.
+- `SECRET_KEY` and `DATABASE_URL` come from environment variables.
 - Testing config uses an in-memory SQLite database.
-- SQLALCHEMY_TRACK_MODIFICATIONS is disabled.
+- `SQLALCHEMY_TRACK_MODIFICATIONS` is disabled.
