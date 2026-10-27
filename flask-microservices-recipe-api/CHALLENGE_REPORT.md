@@ -132,9 +132,11 @@ The baseline is `projects/recipe-api-auth/REFACTOR_PLAN.md`. Use the same test d
 | 37 | Owner deletes own recipe | `DELETE /recipes/<id>` | 200 | deletion message and ID |
 | 38 | Admin deletes another user's recipe | `DELETE /recipes/<id>` | 200 | deletion message and ID |
 
-**Current unchanged count:** not measured.  
+**Predicted comparison for you to verify:** 37 out of 38 scenarios should preserve the baseline status and relevant response fields. The health endpoint intentionally adds a `service` field, so that one is the anticipated difference. This is a prediction from the implementation, not a measured comparison.  
+**Observed unchanged count:** not measured yet.  
 **Total scenarios:** 38.  
-**Expected result:** The gateway forwards legacy route statuses and response bodies from the owning service, but this still needs to be compared against actual monolith captures. Health adds a service field; treat that as an intentional extra field if the baseline body did not include it. Do not state an unchanged count until all 38 requests have been run and compared.
+
+**Report line to finalize after running all requests:** `37 out of 38 responses are unchanged; the remaining intentional difference is the added service label in GET /health.` If any real response differs from this prediction, update the count and describe the actual difference instead.
 
 ## 6. Cache and invalidation — expected result
 
