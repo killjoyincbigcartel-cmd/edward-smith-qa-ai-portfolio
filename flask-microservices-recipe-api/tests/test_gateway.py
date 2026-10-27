@@ -42,6 +42,8 @@ class FakeAsyncClient:
         raise AssertionError(f"Unexpected URL: {url}")
 
     async def request(self, method, url, **kwargs):
+        if url.endswith("/internal/health"):
+            return FakeResponse(403, {"error": "Internal access denied"}, content=b'{"error":"Internal access denied"}')
         assert url.endswith("/recipes")
         return FakeResponse(200, [{"id": 12, "title": "Soup"}], content=b'[{"id":12,"title":"Soup"}]')
 
@@ -98,3 +100,10 @@ def test_legacy_recipe_route_is_proxied(monkeypatch):
     response = create_app().test_client().get("/recipes")
     assert response.status_code == 200
     assert response.get_json()[0]["title"] == "Soup"
+
+
+def test_internal_endpoint_without_token_is_rejected_through_gateway(monkeypatch):
+    monkeypatch.setattr(routes.httpx, "AsyncClient", FakeAsyncClient)
+    response = create_app().test_client().get("/internal/health")
+    assert response.status_code == 403
+    assert response.get_json() == {"error": "Internal access denied"}
