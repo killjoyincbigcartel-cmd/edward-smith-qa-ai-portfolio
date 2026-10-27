@@ -75,7 +75,7 @@ curl -i http://localhost:5000/me -H "Authorization: Bearer $USER_JWT"
 
 The gateway forwards legacy public routes to their owning service, preserving upstream status and response body:
 
-- `/register`, `/login`, and `/me` are owned by the users service. Gateway `GET /me` is the new composed endpoint, combining user details with recipe summary data.
+- `/register` and `/login` are owned by the users service. Gateway `GET /me` is the new composed endpoint, combining user details with recipe summary data.
 - `/recipes` and `/recipes/<id>` are owned by the recipes service.
 - `POST /recipes`, `PATCH /recipes/<id>`, and `DELETE /recipes/<id>` are forwarded to recipes and require a valid user JWT.
 
@@ -83,22 +83,15 @@ The composed `GET /me` calls users `/me` and recipes `/internal/recipes/summary`
 
 ## Internal authentication rejection
 
-Run without a token:
+Call the internal endpoint through the gateway without a token:
 
 ```bash
-curl -i http://localhost:5002/internal/health
-```
-
-Expected contract: HTTP 403 and `{"error":"Internal access denied"}`.
-
-With a wrong token:
-
-```bash
-curl -i http://localhost:5002/internal/health \
+curl -i http://localhost:5000/internal/health
+curl -i http://localhost:5000/internal/health \
   -H 'X-Internal-Token: definitely-not-the-secret'
 ```
 
-Expected contract is also HTTP 403 with the same error body. Use the configured real internal token only in a local terminal; do not paste it into reports or commit it.
+Expected contract: HTTP 403 and `{"error":"Internal access denied"}` for both calls. The gateway does not add an internal token to these client-originated requests; recipes validates the header.
 
 ## Admin acceptance cases
 
