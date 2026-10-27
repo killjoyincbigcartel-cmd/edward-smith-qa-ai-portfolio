@@ -12,25 +12,14 @@ curl -i http://localhost:5002/health
 
 Expected: all return HTTP 200 JSON with their own `service` field. Stop the old Unit 3 slow service before starting the three new processes.
 
-## 2. Internal boundary
-
-Call the internal route through the gateway without the token. The gateway does not add a token to arbitrary client requests, so the recipes service must reject it:
+## 2. Internal boundary through the gateway
 
 ```bash
 curl -i http://localhost:5000/internal/health
 curl -i http://localhost:5000/internal/health -H 'X-Internal-Token: wrong-token'
 ```
 
-Expected: HTTP 403 and `{"error":"Internal access denied"}`.
-
-## 2. Internal boundary
-
-```bash
-curl -i http://localhost:5002/internal/health
-curl -i http://localhost:5002/internal/health -H 'X-Internal-Token: wrong-token'
-```
-
-Expected for both: HTTP 403 and `{"error":"Internal access denied"}`.
+Expected: HTTP 403 and `{"error":"Internal access denied"}` for both calls. The gateway does not inject an internal token into arbitrary client requests.
 
 ## 3. Composition and degradation
 
